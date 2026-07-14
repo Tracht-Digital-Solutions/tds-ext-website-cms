@@ -7,19 +7,25 @@ interface Site {
   updated_at: string;
 }
 
-const api = (path: string, init?: RequestInit) =>
-  fetch(path, { credentials: "include", ...init });
+interface BlockMeta {
+  section_key: string;
+  lang: string;
+  updated_at: string;
+}
+
+const api = (path: string, init?: RequestInit) => fetch(path, { credentials: "include", ...init });
 
 /**
- * Website-CMS managed-sites list + add-site form (checkpoint-1). The per-section
- * block editor (list a site's blocks, edit the JSON via structured forms, save +
- * trigger a rebuild) lands in the next frontend checkpoint.
+ * Website-CMS: managed-sites list + add-site form (CP1) and the per-site content
+ * block editor (CP2) — list a site's section blocks and edit each block's JSON
+ * (one object per section × language), saved via PUT. A save-triggered static-
+ * site rebuild lands in a later checkpoint.
  */
 export default function SitesList() {
   const [sites, setSites] = useState<Site[] | null>(null);
   const [key, setKey] = useState("");
   const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState<Site | null>(null);
 
   const load = () =>
     api("/cms/sites")
@@ -33,13 +39,11 @@ export default function SitesList() {
 
   const create = async () => {
     if (!/^[a-z0-9-]{2,64}$/.test(key) || name.trim() === "") return;
-    setSaving(true);
     const res = await api("/cms/sites", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ site_key: key, name }),
     });
-    setSaving(false);
     if (res.ok) {
       setKey("");
       setName("");
@@ -47,20 +51,16 @@ export default function SitesList() {
     }
   };
 
+  if (selected) {
+    return <SiteEditor site={selected} onBack={() => setSelected(null)} />;
+  }
+
   return (
     <div className="cms-sites">
-      <form
-        className="cms-sites__form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          create();
-        }}
-      >
+      <form className="cms-sites__form" onSubmit={(e) => { e.preventDefault(); create(); }}>
         <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="site-key (kebab)" required />
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" required />
-        <button type="submit" disabled={saving}>
-          Website hinzufügen
-        </button>
+        <button type="submit">Website hinzufügen</button>
       </form>
 
       {sites === null ? (
@@ -71,11 +71,111 @@ export default function SitesList() {
         <ul className="cms-sites__list">
           {sites.map((s) => (
             <li key={s.id}>
-              <strong>{s.name}</strong> <code>{s.site_key}</code>
+              <button type="button" onClick={() => setSelected(s)}>
+                <strong>{s.name}</strong> <code>{s.site_key}</code>
+              </button>
             </li>
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function SiteEditor({ site, onBack }: { site: Site; onBack: () => void }) {
+  const [blocks, setBlocks] = useState<BlockMeta[] | null>(null);
+  const [sectionKey, setSectionKey] = useState("");
+  const [lang, setLang] = useState("de");
+  const [json, setJson] = useState("{}");
+  const [status, setStatus] = useState<string | null>(null);
+
+  const loadBlocks = () =>
+    api(`/cms/${site.site_key}/blocks`)
+      .then((r) => (r.ok ? r.json() : { blocks: [] }))
+      .then((d) => setBlocks(d.blocks ?? []))
+      .catch(() => setBlocks([]));
+
+  useEffect(() => {
+    loadBlocks();
+  }, []);
+
+  const openBlock = async (key: string, l: string) => {
+    setSectionKey(key);
+    setLang(l);
+    setStatus(null);
+    const res = await api(`/cms/${site.site_key}/blocks/${key}?lang=${l}`);
+    const d = res.ok ? await res.json() : { value: null };
+    setJson(JSON.stringify(d.value ?? {}, null, 2));
+  };
+
+  const save = async () => {
+    if (!/^[a-z0-9_-]{1,64}$/.test(sectionKey)) {
+      setStatus("Ungültiger Section-Key.");
+      return;
+    }
+    let value: unknown;
+    try {
+      value = JSON.parse(json);
+    } catch {
+      setStatus("Ungültiges JSON.");
+      return;
+    }
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      setStatus("Wert muss ein JSON-Objekt sein.");
+      return;
+    }
+    const res = await api(`/cms/${site.site_key}/blocks/${sectionKey}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value, lang }),
+    });
+    setStatus(res.ok ? "Gespeichert." : `Fehler (HTTP ${res.status}).`);
+    if (res.ok) loadBlocks();
+  };
+
+  return (
+    <div className="cms-editor">
+      <button type="button" onClick={onBack}>← Websites</button>
+      <h2>{site.name}</h2>
+
+      <div className="cms-editor__blocks">
+        <h3>Sektionen</h3>
+        {blocks === null ? (
+          <p>Wird geladen …</p>
+        ) : blocks.length === 0 ? (
+          <p>Noch keine Blöcke.</p>
+        ) : (
+          <ul>
+            {blocks.map((b) => (
+              <li key={`${b.section_key}-${b.lang}`}>
+                <button type="button" onClick={() => openBlock(b.section_key, b.lang)}>
+                  <code>{b.section_key}</code> <span className="chip chip--neutral">{b.lang}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="cms-editor__form">
+        <h3>Block bearbeiten</h3>
+        <div className="flex gap-2">
+          <input value={sectionKey} onChange={(e) => setSectionKey(e.target.value)} placeholder="section-key (z. B. faq)" />
+          <select value={lang} onChange={(e) => setLang(e.target.value)}>
+            <option value="de">de</option>
+            <option value="en">en</option>
+          </select>
+        </div>
+        <textarea
+          className="cms-editor__json"
+          value={json}
+          onChange={(e) => setJson(e.target.value)}
+          rows={14}
+          spellCheck={false}
+        />
+        {status ? <p className="status-pill status-pill--info">{status}</p> : null}
+        <button type="button" onClick={save}>Speichern</button>
+      </div>
     </div>
   );
 }

@@ -28,9 +28,12 @@ Website-CMS extension, ported from `tds-content-api`'s content-block model. Read
 
 - **CP1:** `cms_site` + `cms_block` schema, `Domain\CmsRepository`, site + block
   CRUD (`/cms/*`) with RBAC, the sites widget + list/add-site UI.
-- **TODO (next):** per-section structured block editor UI; save-triggered
-  static-site rebuild (workflow_dispatch, per-site repo/workflow config in
-  settings); section-shape validation; DeepL block translation.
+- **CP2:** the per-site **block editor UI** (`SiteEditor` in `islands/SitesList.tsx`)
+  — list a site's blocks, open one (section-key + lang → GET), edit its JSON in a
+  textarea with parse + object validation, save via PUT.
+- **TODO (next):** save-triggered static-site rebuild (workflow_dispatch, per-site
+  repo/workflow config in settings); per-section structured forms (over the raw
+  JSON); DeepL block translation.
 
 ## After a change
 
