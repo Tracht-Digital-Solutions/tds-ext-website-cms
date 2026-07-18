@@ -71,8 +71,20 @@ Website-CMS extension, ported from `tds-content-api`'s content-block model. Read
   mode; switching seeds one from the other, and save resolves the active mode
   (invalid JSON blocks the save). Purely frontend — the block API + shape validation
   are unchanged.
-- **TODO (next):** widen `SECTION_SCHEMAS` to the remaining landingpage sections
-  (pricing/consulting/contact/footer/process) as their shapes settle.
+- **CP7:** corrected + widened `SECTION_SCHEMAS` to match the **actual
+  tds-landingpage section defaults** (CP6's hero/about/services keys were guessed
+  and wrong — they'd show empty fields for real content). Now accurate for `hero`
+  (headline/headlineAccent/headlineSuffix/tagline/sub/cta1/cta2/scrollHint),
+  `about` (label/headline/headlineAccent/lead/p1/p2/stat{1,2,3}{Value,Label}),
+  `services` (label/headline/headlineAccent + items `{number,title,description}`;
+  the array `tags` key survives via the spread but isn't form-edited), `faq`
+  (label/headline + items `{q,a}`), `contact` (label/headline/headlineAccent/sub/
+  email/phone/location), and `process` (label/headline/headlineAccent/body + steps
+  `{number,title,duration,description,detail,outcome}`). Partial schemas stay safe —
+  unlisted keys are preserved. When adding a section, copy its shape from the
+  landingpage component's `cmsFor("<key>", …, {…default…})` call.
+- **TODO (next):** pricing/consulting/footer (their defaults are whole tds-shared
+  translation objects — confirm the exact shape before adding).
 
 ## After a change
 

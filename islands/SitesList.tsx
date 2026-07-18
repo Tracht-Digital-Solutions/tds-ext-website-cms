@@ -95,24 +95,42 @@ type Field =
   | { key: string; label: string; type: LeafType }
   | { key: string; label: string; type: "list"; itemLabel: string; itemFields: ItemField[] };
 
+// Shapes match the tds-landingpage section defaults (the primary consumer). A
+// structured form only renders the fields listed here; any other keys in the
+// block survive untouched (the form spreads them), so a partial schema is safe.
 const SECTION_SCHEMAS: Record<string, Field[]> = {
   hero: [
-    { key: "eyebrow", label: "Eyebrow", type: "text" },
     { key: "headline", label: "Überschrift", type: "text" },
-    { key: "subline", label: "Unterzeile", type: "textarea" },
-    { key: "cta", label: "Button-Text", type: "text" },
+    { key: "headlineAccent", label: "Überschrift (Akzent)", type: "text" },
+    { key: "headlineSuffix", label: "Überschrift (Suffix)", type: "text" },
+    { key: "tagline", label: "Tagline", type: "text" },
+    { key: "sub", label: "Untertext", type: "textarea" },
+    { key: "cta1", label: "Button 1", type: "text" },
+    { key: "cta2", label: "Button 2", type: "text" },
+    { key: "scrollHint", label: "Scroll-Hinweis", type: "text" },
   ],
   about: [
-    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "label", label: "Label", type: "text" },
     { key: "headline", label: "Überschrift", type: "text" },
-    { key: "body", label: "Text", type: "textarea" },
+    { key: "headlineAccent", label: "Überschrift (Akzent)", type: "text" },
+    { key: "lead", label: "Lead", type: "textarea" },
+    { key: "p1", label: "Absatz 1", type: "textarea" },
+    { key: "p2", label: "Absatz 2", type: "textarea" },
+    { key: "stat1Value", label: "Statistik 1 – Wert", type: "text" },
+    { key: "stat1Label", label: "Statistik 1 – Label", type: "text" },
+    { key: "stat2Value", label: "Statistik 2 – Wert", type: "text" },
+    { key: "stat2Label", label: "Statistik 2 – Label", type: "text" },
+    { key: "stat3Value", label: "Statistik 3 – Wert", type: "text" },
+    { key: "stat3Label", label: "Statistik 3 – Label", type: "text" },
   ],
   services: [
-    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "label", label: "Label", type: "text" },
     { key: "headline", label: "Überschrift", type: "text" },
+    { key: "headlineAccent", label: "Überschrift (Akzent)", type: "text" },
     { key: "items", label: "Leistungen", type: "list", itemLabel: "Leistung", itemFields: [
+      { key: "number", label: "Nummer", type: "text" },
       { key: "title", label: "Titel", type: "text" },
-      { key: "text", label: "Text", type: "textarea" },
+      { key: "description", label: "Beschreibung", type: "textarea" },
     ] },
   ],
   faq: [
@@ -121,6 +139,29 @@ const SECTION_SCHEMAS: Record<string, Field[]> = {
     { key: "items", label: "Fragen", type: "list", itemLabel: "Frage", itemFields: [
       { key: "q", label: "Frage", type: "text" },
       { key: "a", label: "Antwort", type: "textarea" },
+    ] },
+  ],
+  contact: [
+    { key: "label", label: "Label", type: "text" },
+    { key: "headline", label: "Überschrift", type: "text" },
+    { key: "headlineAccent", label: "Überschrift (Akzent)", type: "text" },
+    { key: "sub", label: "Untertext", type: "textarea" },
+    { key: "email", label: "E-Mail", type: "text" },
+    { key: "phone", label: "Telefon", type: "text" },
+    { key: "location", label: "Ort", type: "text" },
+  ],
+  process: [
+    { key: "label", label: "Label", type: "text" },
+    { key: "headline", label: "Überschrift", type: "text" },
+    { key: "headlineAccent", label: "Überschrift (Akzent)", type: "text" },
+    { key: "body", label: "Text", type: "textarea" },
+    { key: "steps", label: "Schritte", type: "list", itemLabel: "Schritt", itemFields: [
+      { key: "number", label: "Nummer", type: "text" },
+      { key: "title", label: "Titel", type: "text" },
+      { key: "duration", label: "Dauer", type: "text" },
+      { key: "description", label: "Beschreibung", type: "textarea" },
+      { key: "detail", label: "Detail", type: "textarea" },
+      { key: "outcome", label: "Ergebnis", type: "textarea" },
     ] },
   ],
 };
