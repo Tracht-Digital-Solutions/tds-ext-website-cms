@@ -53,8 +53,16 @@ Website-CMS extension, ported from `tds-content-api`'s content-block model. Read
   inactive) catches up existing blocks. UI: an "Auto" badge on machine blocks + a
   backfill button. Writes go through the repo (never the route) so the sync can't
   ping-pong. Mirror of blog-cms CP4.
-- **TODO (next):** per-section structured forms (over the raw JSON); move the DeepL +
-  rebuild tokens into the runtime settings store.
+- **CP5:** **runtime settings store adoption** (mirror of blog-cms CP8). The DeepL
+  key + auto-translate flag + rebuild token are read **DB-first with env fallback**
+  via the core's `SettingsStore` (contract interface, resolved from the container;
+  null in isolated tests ⇒ env-only). Namespace `website-cms`, keys
+  `deepl_api_key`/`rebuild_token` (secret, AES-GCM by the core) + `auto_translate`.
+  The settings slot (`islands/Settings.astro` → `WebsiteSettings`) reads/writes the
+  core admin API `/admin/settings/website-cms` (masked; blank secret = keep). Env
+  vars (`WEBSITE_DEEPL_API_KEY`/`DEEPL_API_KEY`, `WEBSITE_AUTO_TRANSLATE`,
+  `WEBSITE_REBUILD_TOKEN`) remain the fallback.
+- **TODO (next):** per-section structured forms (over the raw JSON).
 
 ## After a change
 

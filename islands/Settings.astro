@@ -1,9 +1,13 @@
 ---
 // Website-CMS settings section, rendered by the base Einstellungen host via
-// virtual:panel-settings. Checkpoint-1 placeholder; per-site rebuild-hook config
-// (repo/workflow) lands with the rebuild-trigger checkpoint.
+// virtual:panel-settings. Hosts the WebsiteSettings island, which reads/writes
+// the core runtime settings store (`/admin/settings/website-cms`): DeepL key,
+// auto-translate flag, and the rebuild token — DB-first, env fallback in the
+// backend. Secrets are stored AES-256-GCM-encrypted by the core.
+import WebsiteSettings from "./WebsiteSettings.tsx";
 ---
 
 <div class="settings-section settings-section--website-cms">
-  <p>Website-CMS-Einstellungen (Rebuild-Hooks je Website folgen).</p>
+  <h3>Website-CMS</h3>
+  <WebsiteSettings client:load />
 </div>
