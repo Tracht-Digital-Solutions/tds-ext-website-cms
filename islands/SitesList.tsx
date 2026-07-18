@@ -4,6 +4,8 @@ interface Site {
   id: number;
   site_key: string;
   name: string;
+  rebuild_repo?: string | null;
+  rebuild_workflow?: string | null;
   updated_at: string;
 }
 
@@ -88,6 +90,9 @@ function SiteEditor({ site, onBack }: { site: Site; onBack: () => void }) {
   const [lang, setLang] = useState("de");
   const [json, setJson] = useState("{}");
   const [status, setStatus] = useState<string | null>(null);
+  const [rebuildRepo, setRebuildRepo] = useState(site.rebuild_repo ?? "");
+  const [rebuildWorkflow, setRebuildWorkflow] = useState(site.rebuild_workflow ?? "dev.yml");
+  const [rebuildStatus, setRebuildStatus] = useState<string | null>(null);
 
   const loadBlocks = () =>
     api(`/cms/${site.site_key}/blocks`)
@@ -129,8 +134,31 @@ function SiteEditor({ site, onBack }: { site: Site; onBack: () => void }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ value, lang }),
     });
-    setStatus(res.ok ? "Gespeichert." : `Fehler (HTTP ${res.status}).`);
+    setStatus(res.ok ? "Gespeichert (Rebuild ausgelöst, falls konfiguriert)." : `Fehler (HTTP ${res.status}).`);
     if (res.ok) loadBlocks();
+  };
+
+  const saveRebuildConfig = async () => {
+    const res = await api(`/cms/sites/${site.site_key}/rebuild-config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rebuild_repo: rebuildRepo.trim(), rebuild_workflow: rebuildWorkflow.trim() }),
+    });
+    setRebuildStatus(res.ok ? "Rebuild-Konfiguration gespeichert." : `Fehler (HTTP ${res.status}).`);
+  };
+
+  const rebuildNow = async () => {
+    setRebuildStatus("Rebuild wird ausgelöst …");
+    const res = await api(`/cms/sites/${site.site_key}/rebuild`, { method: "POST" });
+    if (res.ok) {
+      setRebuildStatus("Rebuild ausgelöst.");
+    } else if (res.status === 503) {
+      setRebuildStatus("Kein Rebuild-Token konfiguriert (WEBSITE_REBUILD_TOKEN).");
+    } else if (res.status === 422) {
+      setRebuildStatus("Für diese Website ist kein Repository hinterlegt.");
+    } else {
+      setRebuildStatus(`Fehler (HTTP ${res.status}).`);
+    }
   };
 
   return (
@@ -175,6 +203,31 @@ function SiteEditor({ site, onBack }: { site: Site; onBack: () => void }) {
         />
         {status ? <p className="status-pill status-pill--info">{status}</p> : null}
         <button type="button" onClick={save}>Speichern</button>
+      </div>
+
+      <div className="cms-editor__rebuild">
+        <h3>Rebuild-Konfiguration</h3>
+        <p className="cms-editor__hint">
+          Repository (<code>owner/name</code>) und Workflow-Datei, die ein Speichern neu baut.
+          Der Token wird serverseitig über <code>WEBSITE_REBUILD_TOKEN</code> bereitgestellt.
+        </p>
+        <div className="flex gap-2">
+          <input
+            value={rebuildRepo}
+            onChange={(e) => setRebuildRepo(e.target.value)}
+            placeholder="Tracht-Digital-Solutions/tds-landingpage"
+          />
+          <input
+            value={rebuildWorkflow}
+            onChange={(e) => setRebuildWorkflow(e.target.value)}
+            placeholder="dev.yml"
+          />
+        </div>
+        {rebuildStatus ? <p className="status-pill status-pill--info">{rebuildStatus}</p> : null}
+        <div className="flex gap-2">
+          <button type="button" onClick={saveRebuildConfig}>Konfiguration speichern</button>
+          <button type="button" onClick={rebuildNow}>Jetzt neu bauen</button>
+        </div>
       </div>
     </div>
   );

@@ -31,9 +31,17 @@ Website-CMS extension, ported from `tds-content-api`'s content-block model. Read
 - **CP2:** the per-site **block editor UI** (`SiteEditor` in `islands/SitesList.tsx`)
   — list a site's blocks, open one (section-key + lang → GET), edit its JSON in a
   textarea with parse + object validation, save via PUT.
-- **TODO (next):** save-triggered static-site rebuild (workflow_dispatch, per-site
-  repo/workflow config in settings); per-section structured forms (over the raw
-  JSON); DeepL block translation.
+- **CP3:** save-triggered **static-site rebuild**. `Service\RebuildTrigger` (plain
+  ext-curl, best-effort, never throws) fires a GitHub `workflow_dispatch` after a
+  block save/delete. Per-site target lives on `cms_site` (`rebuild_repo` "owner/name"
+  + `rebuild_workflow`, defaulting `dev.yml`), edited via `PUT /cms/sites/{site}/
+  rebuild-config`; the shared PAT comes from `WEBSITE_REBUILD_TOKEN` (one PAT
+  dispatches every site repo; unset ⇒ no-op). `POST /cms/sites/{site}/rebuild` is a
+  manual "Jetzt neu bauen" (503 no token / 422 no repo). Sends `ref` only — the
+  dispatches endpoint 422s on inputs a workflow doesn't declare. UI: a
+  Rebuild-Konfiguration block in the SiteEditor.
+- **TODO (next):** per-section structured forms (over the raw JSON); DeepL block
+  translation; move the rebuild token into the runtime settings store.
 
 ## After a change
 

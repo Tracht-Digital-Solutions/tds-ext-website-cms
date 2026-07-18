@@ -36,10 +36,20 @@ final class CmsRepository
     /** @return array<string,mixed>|null */
     public function findSite(string $siteKey): ?array
     {
-        $stmt = $this->pdo->prepare('SELECT id, site_key, name FROM cms_site WHERE site_key = :k LIMIT 1');
+        $stmt = $this->pdo->prepare(
+            'SELECT id, site_key, name, rebuild_repo, rebuild_workflow FROM cms_site WHERE site_key = :k LIMIT 1'
+        );
         $stmt->execute([':k' => $siteKey]);
         $row = $stmt->fetch();
         return $row === false ? null : $row;
+    }
+
+    public function updateSiteRebuild(int $siteId, ?string $repo, ?string $workflow): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE cms_site SET rebuild_repo = :r, rebuild_workflow = :w WHERE id = :id'
+        );
+        $stmt->execute([':r' => $repo, ':w' => $workflow, ':id' => $siteId]);
     }
 
     public function siteKeyExists(string $siteKey): bool

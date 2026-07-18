@@ -8,6 +8,7 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\App;
 use Tds\Ext\WebsiteCms\Domain\CmsRepository;
+use Tds\Ext\WebsiteCms\Service\RebuildTrigger;
 use Tds\Panel\Contract\AbstractModule;
 use Tds\Panel\Contract\PermissionDef;
 use Tds\Panel\Contract\UserContext;
@@ -48,6 +49,9 @@ final class WebsiteCmsModule extends AbstractModule
         $c = $app->getContainer();
         if ($c !== null && !$c->has(CmsRepository::class)) {
             $c->set(CmsRepository::class, static fn ($c) => new CmsRepository($c->get(PDO::class)));
+        }
+        if ($c !== null && !$c->has(RebuildTrigger::class)) {
+            $c->set(RebuildTrigger::class, static fn () => RebuildTrigger::fromEnv());
         }
 
         $app->get('/cms/summary', function (Request $req, Response $res) use ($c): Response {
@@ -121,7 +125,49 @@ final class WebsiteCmsModule extends AbstractModule
             }
             $lang = self::lang($body['lang'] ?? 'de');
             $repo->putBlock((int) $site['id'], (string) $args['key'], $lang, json_encode($body['value'], JSON_THROW_ON_ERROR));
+            self::fireRebuild($c->get(RebuildTrigger::class), $site, 'block ' . (string) $args['key'] . ' saved');
             return self::json($res, ['ok' => true]);
+        });
+
+        // Set a site's rebuild target (repo/workflow); blank clears it.
+        $app->put('/cms/sites/{site:[a-z0-9-]+}/rebuild-config', function (Request $req, Response $res, array $args) use ($c): Response {
+            if (($deny = self::require($c->get(UserContext::class), 'website:write', $res)) !== null) {
+                return $deny;
+            }
+            $repo = $c->get(CmsRepository::class);
+            $site = $repo->findSite((string) $args['site']);
+            if ($site === null) {
+                return self::json($res, ['error' => 'Site not found'], 404);
+            }
+            $body = (array) $req->getParsedBody();
+            $repoName = trim((string) ($body['rebuild_repo'] ?? ''));
+            $workflow = trim((string) ($body['rebuild_workflow'] ?? ''));
+            if ($repoName !== '' && preg_match('#^[\w.-]+/[\w.-]+$#', $repoName) !== 1) {
+                return self::json($res, ['error' => 'rebuild_repo must be "owner/name"'], 422);
+            }
+            $repo->updateSiteRebuild((int) $site['id'], $repoName !== '' ? $repoName : null, $workflow !== '' ? $workflow : null);
+            return self::json($res, ['ok' => true]);
+        });
+
+        // Manually fire a site's rebuild ("Jetzt neu bauen").
+        $app->post('/cms/sites/{site:[a-z0-9-]+}/rebuild', function (Request $req, Response $res, array $args) use ($c): Response {
+            if (($deny = self::require($c->get(UserContext::class), 'website:write', $res)) !== null) {
+                return $deny;
+            }
+            $repo = $c->get(CmsRepository::class);
+            $site = $repo->findSite((string) $args['site']);
+            if ($site === null) {
+                return self::json($res, ['error' => 'Site not found'], 404);
+            }
+            $trigger = $c->get(RebuildTrigger::class);
+            if (!$trigger->isConfigured()) {
+                return self::json($res, ['error' => 'Rebuild token not configured'], 503);
+            }
+            if (trim((string) ($site['rebuild_repo'] ?? '')) === '') {
+                return self::json($res, ['error' => 'No rebuild repo configured for this site'], 422);
+            }
+            self::fireRebuild($trigger, $site, 'manual rebuild');
+            return self::json($res, ['ok' => true], 202);
         });
 
         $app->delete('/cms/{site:[a-z0-9-]+}/blocks/{key:[a-z0-9_-]+}', function (Request $req, Response $res, array $args) use ($c): Response {
@@ -134,11 +180,22 @@ final class WebsiteCmsModule extends AbstractModule
                 return self::json($res, ['error' => 'Site not found'], 404);
             }
             $repo->deleteBlock((int) $site['id'], (string) $args['key'], self::lang($req->getQueryParams()['lang'] ?? 'de'));
+            self::fireRebuild($c->get(RebuildTrigger::class), $site, 'block ' . (string) $args['key'] . ' deleted');
             return self::json($res, ['ok' => true]);
         });
     }
 
     // --- helpers ---------------------------------------------------------------
+
+    /** @param array<string,mixed> $site */
+    private static function fireRebuild(RebuildTrigger $trigger, array $site, string $reason): void
+    {
+        $trigger->trigger(
+            isset($site['rebuild_repo']) ? (string) $site['rebuild_repo'] : null,
+            isset($site['rebuild_workflow']) ? (string) $site['rebuild_workflow'] : null,
+            $reason,
+        );
+    }
 
     private static function require(UserContext $user, string $permission, Response $res): ?Response
     {
