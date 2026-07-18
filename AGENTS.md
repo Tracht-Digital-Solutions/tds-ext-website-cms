@@ -62,7 +62,17 @@ Website-CMS extension, ported from `tds-content-api`'s content-block model. Read
   core admin API `/admin/settings/website-cms` (masked; blank secret = keep). Env
   vars (`WEBSITE_DEEPL_API_KEY`/`DEEPL_API_KEY`, `WEBSITE_AUTO_TRANSLATE`,
   `WEBSITE_REBUILD_TOKEN`) remain the fallback.
-- **TODO (next):** per-section structured forms (over the raw JSON).
+- **CP6:** **per-section structured forms.** Known section keys (`hero`, `about`,
+  `services`, `faq` — extend `SECTION_SCHEMAS` in `islands/SitesList.tsx`) render
+  typed fields (text/textarea + repeatable object lists like faq `items:[{q,a}]`)
+  instead of raw JSON; unknown sections fall back to the JSON editor. A **Form/JSON
+  toggle** is always available (known sections open in Form). The editor keeps a
+  parsed `value` object as source of truth in Form mode and the JSON text in JSON
+  mode; switching seeds one from the other, and save resolves the active mode
+  (invalid JSON blocks the save). Purely frontend — the block API + shape validation
+  are unchanged.
+- **TODO (next):** widen `SECTION_SCHEMAS` to the remaining landingpage sections
+  (pricing/consulting/contact/footer/process) as their shapes settle.
 
 ## After a change
 

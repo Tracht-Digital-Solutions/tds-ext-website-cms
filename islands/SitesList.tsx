@@ -85,11 +85,122 @@ export default function SitesList() {
   );
 }
 
+// --- structured section forms ----------------------------------------------
+// Known section shapes render typed fields (with repeatable item lists) instead
+// of raw JSON. Anything not here falls back to the JSON editor, and a Form/JSON
+// toggle is always available. Add a section here to give it a structured form.
+type LeafType = "text" | "textarea";
+type ItemField = { key: string; label: string; type: LeafType };
+type Field =
+  | { key: string; label: string; type: LeafType }
+  | { key: string; label: string; type: "list"; itemLabel: string; itemFields: ItemField[] };
+
+const SECTION_SCHEMAS: Record<string, Field[]> = {
+  hero: [
+    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "headline", label: "Überschrift", type: "text" },
+    { key: "subline", label: "Unterzeile", type: "textarea" },
+    { key: "cta", label: "Button-Text", type: "text" },
+  ],
+  about: [
+    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "headline", label: "Überschrift", type: "text" },
+    { key: "body", label: "Text", type: "textarea" },
+  ],
+  services: [
+    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "headline", label: "Überschrift", type: "text" },
+    { key: "items", label: "Leistungen", type: "list", itemLabel: "Leistung", itemFields: [
+      { key: "title", label: "Titel", type: "text" },
+      { key: "text", label: "Text", type: "textarea" },
+    ] },
+  ],
+  faq: [
+    { key: "label", label: "Label", type: "text" },
+    { key: "headline", label: "Überschrift", type: "text" },
+    { key: "items", label: "Fragen", type: "list", itemLabel: "Frage", itemFields: [
+      { key: "q", label: "Frage", type: "text" },
+      { key: "a", label: "Antwort", type: "textarea" },
+    ] },
+  ],
+};
+
+type Obj = Record<string, unknown>;
+
+function LeafInput({ type, value, onChange }: { type: LeafType; value: string; onChange: (v: string) => void }) {
+  return type === "textarea" ? (
+    <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={3} />
+  ) : (
+    <input value={value} onChange={(e) => onChange(e.target.value)} />
+  );
+}
+
+function ListEditor({
+  field,
+  items,
+  onChange,
+}: {
+  field: Extract<Field, { type: "list" }>;
+  items: Obj[];
+  onChange: (items: Obj[]) => void;
+}) {
+  const update = (i: number, key: string, v: string) =>
+    onChange(items.map((it, idx) => (idx === i ? { ...it, [key]: v } : it)));
+  const add = () => onChange([...items, Object.fromEntries(field.itemFields.map((f) => [f.key, ""]))]);
+  const remove = (i: number) => onChange(items.filter((_, idx) => idx !== i));
+
+  return (
+    <div className="cms-form__list">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">{field.label}</span>
+        <button type="button" className="text-xs" onClick={add}>+ {field.itemLabel}</button>
+      </div>
+      {items.length === 0 ? <p className="text-xs opacity-60">Noch keine Einträge.</p> : null}
+      {items.map((it, i) => (
+        <div key={i} className="cms-form__item rounded-lg border border-[color:var(--color-border)] p-3 space-y-2">
+          {field.itemFields.map((f) => (
+            <label key={f.key} className="block text-sm">
+              {f.label}
+              <LeafInput type={f.type} value={String(it[f.key] ?? "")} onChange={(v) => update(i, f.key, v)} />
+            </label>
+          ))}
+          <button type="button" className="danger text-xs" onClick={() => remove(i)}>Eintrag entfernen</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StructuredForm({ schema, value, onChange }: { schema: Field[]; value: Obj; onChange: (v: Obj) => void }) {
+  const setField = (key: string, v: unknown) => onChange({ ...value, [key]: v });
+  return (
+    <div className="cms-form space-y-3">
+      {schema.map((f) =>
+        f.type === "list" ? (
+          <ListEditor
+            key={f.key}
+            field={f}
+            items={Array.isArray(value[f.key]) ? (value[f.key] as Obj[]) : []}
+            onChange={(items) => setField(f.key, items)}
+          />
+        ) : (
+          <label key={f.key} className="block text-sm">
+            {f.label}
+            <LeafInput type={f.type} value={String(value[f.key] ?? "")} onChange={(v) => setField(f.key, v)} />
+          </label>
+        ),
+      )}
+    </div>
+  );
+}
+
 function SiteEditor({ site, onBack }: { site: Site; onBack: () => void }) {
   const [blocks, setBlocks] = useState<BlockMeta[] | null>(null);
   const [sectionKey, setSectionKey] = useState("");
   const [lang, setLang] = useState("de");
   const [json, setJson] = useState("{}");
+  const [value, setValue] = useState<Obj>({});
+  const [mode, setMode] = useState<"form" | "json">("json");
   const [status, setStatus] = useState<string | null>(null);
   const [rebuildRepo, setRebuildRepo] = useState(site.rebuild_repo ?? "");
   const [rebuildWorkflow, setRebuildWorkflow] = useState(site.rebuild_workflow ?? "dev.yml");
@@ -120,13 +231,51 @@ function SiteEditor({ site, onBack }: { site: Site; onBack: () => void }) {
     loadBlocks();
   }, []);
 
+  const setSection = (key: string) => {
+    setSectionKey(key);
+    // A known section opens in the structured form; others in raw JSON.
+    setMode(SECTION_SCHEMAS[key] ? "form" : "json");
+  };
+
   const openBlock = async (key: string, l: string) => {
     setSectionKey(key);
     setLang(l);
     setStatus(null);
     const res = await api(`/cms/${site.site_key}/blocks/${key}?lang=${l}`);
     const d = res.ok ? await res.json() : { value: null };
-    setJson(JSON.stringify(d.value ?? {}, null, 2));
+    const obj: Obj = d.value && typeof d.value === "object" && !Array.isArray(d.value) ? d.value : {};
+    setValue(obj);
+    setJson(JSON.stringify(obj, null, 2));
+    setMode(SECTION_SCHEMAS[key] ? "form" : "json");
+  };
+
+  /** Resolve the object to save from whichever mode is active. */
+  const currentValue = (): Obj | null => {
+    if (mode === "form") return value;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(json);
+    } catch {
+      return null;
+    }
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Obj) : null;
+  };
+
+  const toForm = () => {
+    // Entering the form: seed it from the JSON text (best-effort).
+    const v = currentValue();
+    if (v === null) {
+      setStatus("Ungültiges JSON — Formular nicht verfügbar.");
+      return;
+    }
+    setValue(v);
+    setStatus(null);
+    setMode("form");
+  };
+
+  const toJson = () => {
+    setJson(JSON.stringify(value, null, 2));
+    setMode("json");
   };
 
   const save = async () => {
@@ -134,21 +283,15 @@ function SiteEditor({ site, onBack }: { site: Site; onBack: () => void }) {
       setStatus("Ungültiger Section-Key.");
       return;
     }
-    let value: unknown;
-    try {
-      value = JSON.parse(json);
-    } catch {
-      setStatus("Ungültiges JSON.");
-      return;
-    }
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      setStatus("Wert muss ein JSON-Objekt sein.");
+    const v = currentValue();
+    if (v === null) {
+      setStatus("Wert muss ein gültiges JSON-Objekt sein.");
       return;
     }
     const res = await api(`/cms/${site.site_key}/blocks/${sectionKey}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ value, lang }),
+      body: JSON.stringify({ value: v, lang }),
     });
     setStatus(res.ok ? "Gespeichert (Rebuild ausgelöst, falls konfiguriert)." : `Fehler (HTTP ${res.status}).`);
     if (res.ok) loadBlocks();
@@ -205,21 +348,32 @@ function SiteEditor({ site, onBack }: { site: Site; onBack: () => void }) {
       </div>
 
       <div className="cms-editor__form">
-        <h3>Block bearbeiten</h3>
+        <div className="flex items-center justify-between">
+          <h3>Block bearbeiten</h3>
+          {SECTION_SCHEMAS[sectionKey] ? (
+            <button type="button" className="text-xs" onClick={() => (mode === "form" ? toJson() : toForm())}>
+              {mode === "form" ? "JSON bearbeiten" : "Formular"}
+            </button>
+          ) : null}
+        </div>
         <div className="flex gap-2">
-          <input value={sectionKey} onChange={(e) => setSectionKey(e.target.value)} placeholder="section-key (z. B. faq)" />
+          <input value={sectionKey} onChange={(e) => setSection(e.target.value)} placeholder="section-key (z. B. faq)" />
           <select value={lang} onChange={(e) => setLang(e.target.value)}>
             <option value="de">de</option>
             <option value="en">en</option>
           </select>
         </div>
-        <textarea
-          className="cms-editor__json"
-          value={json}
-          onChange={(e) => setJson(e.target.value)}
-          rows={14}
-          spellCheck={false}
-        />
+        {mode === "form" && SECTION_SCHEMAS[sectionKey] ? (
+          <StructuredForm schema={SECTION_SCHEMAS[sectionKey]!} value={value} onChange={setValue} />
+        ) : (
+          <textarea
+            className="cms-editor__json"
+            value={json}
+            onChange={(e) => setJson(e.target.value)}
+            rows={14}
+            spellCheck={false}
+          />
+        )}
         {status ? <p className="status-pill status-pill--info">{status}</p> : null}
         <button type="button" onClick={save}>Speichern</button>
       </div>
