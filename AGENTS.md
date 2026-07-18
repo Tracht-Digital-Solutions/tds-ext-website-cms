@@ -40,8 +40,21 @@ Website-CMS extension, ported from `tds-content-api`'s content-block model. Read
   manual "Jetzt neu bauen" (503 no token / 422 no repo). Sends `ref` only — the
   dispatches endpoint 422s on inputs a workflow doesn't declare. UI: a
   Rebuild-Konfiguration block in the SiteEditor.
-- **TODO (next):** per-section structured forms (over the raw JSON); DeepL block
-  translation; move the rebuild token into the runtime settings store.
+- **CP4:** **DeepL auto-translation** of blocks (save-time sync, ported from
+  tds-content-api). `cms_block.machine_translated` flags auto-generated rows. On a
+  block save, `Service\TranslationSync` extracts the human-copy leaves via
+  `TranslatableJsonWalker` (skips href/url/icon/slug/id/email keys + URL/path/email
+  shapes), batch-translates them, and re-applies onto the counterpart-language block
+  (`machine_translated=1`) — only when that counterpart is absent or itself machine-
+  made; a manual save clears the row's own flag. Delete cascades onto a machine
+  counterpart. `Service\DeeplTranslator` is a curl port (no Guzzle; `:fx` ⇒ free).
+  Config: `WEBSITE_DEEPL_API_KEY` (+ `WEBSITE_AUTO_TRANSLATE=0` to opt out); unset ⇒
+  no-op. `POST /cms/sites/{site}/translations/backfill` (website:write, 503 when
+  inactive) catches up existing blocks. UI: an "Auto" badge on machine blocks + a
+  backfill button. Writes go through the repo (never the route) so the sync can't
+  ping-pong. Mirror of blog-cms CP4.
+- **TODO (next):** per-section structured forms (over the raw JSON); move the DeepL +
+  rebuild tokens into the runtime settings store.
 
 ## After a change
 

@@ -72,7 +72,7 @@ final class CmsRepository
     public function blocks(int $siteId): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT section_key, lang, updated_at FROM cms_block WHERE site_id = :s
+            'SELECT section_key, lang, machine_translated, updated_at FROM cms_block WHERE site_id = :s
              ORDER BY section_key, lang'
         );
         $stmt->execute([':s' => $siteId]);
@@ -90,14 +90,32 @@ final class CmsRepository
         return $json === false ? null : json_decode((string) $json, true);
     }
 
-    public function putBlock(int $siteId, string $sectionKey, string $lang, string $valueJson): void
+    /** The decoded value + machine_translated flag, or null when absent. @return array{value:mixed,machine_translated:int}|null */
+    public function getBlockRow(int $siteId, string $sectionKey, string $lang): ?array
     {
         $stmt = $this->pdo->prepare(
-            'INSERT INTO cms_block (site_id, section_key, lang, value_json)
-             VALUES (:s, :k, :l, :v)
-             ON DUPLICATE KEY UPDATE value_json = :v2'
+            'SELECT value_json, machine_translated FROM cms_block WHERE site_id = :s AND section_key = :k AND lang = :l LIMIT 1'
         );
-        $stmt->execute([':s' => $siteId, ':k' => $sectionKey, ':l' => $lang, ':v' => $valueJson, ':v2' => $valueJson]);
+        $stmt->execute([':s' => $siteId, ':k' => $sectionKey, ':l' => $lang]);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return null;
+        }
+        return [
+            'value' => json_decode((string) $row['value_json'], true),
+            'machine_translated' => (int) $row['machine_translated'],
+        ];
+    }
+
+    public function putBlock(int $siteId, string $sectionKey, string $lang, string $valueJson, bool $machineTranslated = false): void
+    {
+        $mt = $machineTranslated ? 1 : 0;
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO cms_block (site_id, section_key, lang, value_json, machine_translated)
+             VALUES (:s, :k, :l, :v, :mt)
+             ON DUPLICATE KEY UPDATE value_json = :v2, machine_translated = :mt2'
+        );
+        $stmt->execute([':s' => $siteId, ':k' => $sectionKey, ':l' => $lang, ':v' => $valueJson, ':mt' => $mt, ':v2' => $valueJson, ':mt2' => $mt]);
     }
 
     public function deleteBlock(int $siteId, string $sectionKey, string $lang): void

@@ -12,6 +12,7 @@ interface Site {
 interface BlockMeta {
   section_key: string;
   lang: string;
+  machine_translated?: number | boolean;
   updated_at: string;
 }
 
@@ -93,6 +94,21 @@ function SiteEditor({ site, onBack }: { site: Site; onBack: () => void }) {
   const [rebuildRepo, setRebuildRepo] = useState(site.rebuild_repo ?? "");
   const [rebuildWorkflow, setRebuildWorkflow] = useState(site.rebuild_workflow ?? "dev.yml");
   const [rebuildStatus, setRebuildStatus] = useState<string | null>(null);
+  const [backfillStatus, setBackfillStatus] = useState<string | null>(null);
+
+  const backfill = async () => {
+    setBackfillStatus("Übersetzungen werden erzeugt …");
+    const res = await api(`/cms/sites/${site.site_key}/translations/backfill`, { method: "POST" });
+    if (res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setBackfillStatus(`Fertig: ${d.created ?? 0} erstellt, ${d.skipped ?? 0} übersprungen.`);
+      loadBlocks();
+    } else if (res.status === 503) {
+      setBackfillStatus("Automatische Übersetzung ist nicht konfiguriert (WEBSITE_DEEPL_API_KEY).");
+    } else {
+      setBackfillStatus(`Fehler (HTTP ${res.status}).`);
+    }
+  };
 
   const loadBlocks = () =>
     api(`/cms/${site.site_key}/blocks`)
@@ -178,6 +194,9 @@ function SiteEditor({ site, onBack }: { site: Site; onBack: () => void }) {
               <li key={`${b.section_key}-${b.lang}`}>
                 <button type="button" onClick={() => openBlock(b.section_key, b.lang)}>
                   <code>{b.section_key}</code> <span className="chip chip--neutral">{b.lang}</span>
+                  {b.machine_translated ? (
+                    <span className="chip chip--info" title="Automatisch übersetzt">Auto</span>
+                  ) : null}
                 </button>
               </li>
             ))}
@@ -203,6 +222,17 @@ function SiteEditor({ site, onBack }: { site: Site; onBack: () => void }) {
         />
         {status ? <p className="status-pill status-pill--info">{status}</p> : null}
         <button type="button" onClick={save}>Speichern</button>
+      </div>
+
+      <div className="cms-editor__translate">
+        <h3>Automatische Übersetzung</h3>
+        <p className="cms-editor__hint">
+          Beim Speichern eines Blocks wird die Gegensprache per DeepL erzeugt (Schlüssel
+          serverseitig via <code>WEBSITE_DEEPL_API_KEY</code>). Vorhandene Blöcke lassen
+          sich hier nachziehen.
+        </p>
+        {backfillStatus ? <p className="status-pill status-pill--info">{backfillStatus}</p> : null}
+        <button type="button" onClick={backfill}>Übersetzungen nachziehen</button>
       </div>
 
       <div className="cms-editor__rebuild">

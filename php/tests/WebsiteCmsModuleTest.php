@@ -140,4 +140,31 @@ final class WebsiteCmsModuleTest extends TestCase
         $res = $this->post($this->appWith(new FakeUser(perms: ['website:read'])), '/cms/sites/demo/rebuild', []);
         self::assertSame(403, $res->getStatusCode());
     }
+
+    public function testBackfillRequiresWrite(): void
+    {
+        $res = $this->post($this->appWith(new FakeUser(perms: ['website:read'])), '/cms/sites/demo/translations/backfill', []);
+        self::assertSame(403, $res->getStatusCode());
+    }
+
+    public function testJsonWalkerCollectsCopyAndSkipsNonCopy(): void
+    {
+        $walker = new \Tds\Ext\WebsiteCms\Service\TranslatableJsonWalker();
+        $value = [
+            'headline' => 'Willkommen',
+            'href' => '/kontakt',              // skip-key
+            'cta' => 'https://example.com',    // looks non-copy
+            'email' => 'a@b.de',               // skip-key + shape
+            'items' => [['q' => 'Frage?', 'a' => 'Antwort.']],
+        ];
+        // Copy leaves collected depth-first, non-copy skipped.
+        self::assertSame(['Willkommen', 'Frage?', 'Antwort.'], $walker->collect($value));
+
+        // apply() maps a same-length translations array back 1:1, leaving structure intact.
+        $applied = $walker->apply($value, ['Welcome', 'Question?', 'Answer.']);
+        self::assertSame('Welcome', $applied['headline']);
+        self::assertSame('/kontakt', $applied['href']);
+        self::assertSame('Question?', $applied['items'][0]['q']);
+        self::assertSame('Answer.', $applied['items'][0]['a']);
+    }
 }

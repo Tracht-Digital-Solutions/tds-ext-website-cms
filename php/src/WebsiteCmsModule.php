@@ -8,7 +8,9 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\App;
 use Tds\Ext\WebsiteCms\Domain\CmsRepository;
+use Tds\Ext\WebsiteCms\Service\DeeplTranslator;
 use Tds\Ext\WebsiteCms\Service\RebuildTrigger;
+use Tds\Ext\WebsiteCms\Service\TranslationSync;
 use Tds\Panel\Contract\AbstractModule;
 use Tds\Panel\Contract\PermissionDef;
 use Tds\Panel\Contract\UserContext;
@@ -52,6 +54,12 @@ final class WebsiteCmsModule extends AbstractModule
         }
         if ($c !== null && !$c->has(RebuildTrigger::class)) {
             $c->set(RebuildTrigger::class, static fn () => RebuildTrigger::fromEnv());
+        }
+        if ($c !== null && !$c->has(TranslationSync::class)) {
+            $c->set(TranslationSync::class, static fn ($c) => TranslationSync::fromEnv(
+                $c->get(CmsRepository::class),
+                DeeplTranslator::fromEnv(),
+            ));
         }
 
         $app->get('/cms/summary', function (Request $req, Response $res) use ($c): Response {
@@ -124,9 +132,12 @@ final class WebsiteCmsModule extends AbstractModule
                 return self::json($res, ['error' => 'value (object) is required'], 422);
             }
             $lang = self::lang($body['lang'] ?? 'de');
-            $repo->putBlock((int) $site['id'], (string) $args['key'], $lang, json_encode($body['value'], JSON_THROW_ON_ERROR));
+            // A manual save is authored content — machine_translated=false clears the flag.
+            $repo->putBlock((int) $site['id'], (string) $args['key'], $lang, json_encode($body['value'], JSON_THROW_ON_ERROR), false);
+            // Auto-translate the counterpart language (best-effort).
+            $translated = $c->get(TranslationSync::class)->afterSave((int) $site['id'], (string) $args['key'], $lang, $body['value']);
             self::fireRebuild($c->get(RebuildTrigger::class), $site, 'block ' . (string) $args['key'] . ' saved');
-            return self::json($res, ['ok' => true]);
+            return self::json($res, ['ok' => true, 'translated' => $translated]);
         });
 
         // Set a site's rebuild target (repo/workflow); blank clears it.
@@ -179,9 +190,44 @@ final class WebsiteCmsModule extends AbstractModule
             if ($site === null) {
                 return self::json($res, ['error' => 'Site not found'], 404);
             }
-            $repo->deleteBlock((int) $site['id'], (string) $args['key'], self::lang($req->getQueryParams()['lang'] ?? 'de'));
+            $lang = self::lang($req->getQueryParams()['lang'] ?? 'de');
+            $repo->deleteBlock((int) $site['id'], (string) $args['key'], $lang);
+            // A machine-translated counterpart was derived from this block — drop it too.
+            $c->get(TranslationSync::class)->afterDelete((int) $site['id'], (string) $args['key'], $lang);
             self::fireRebuild($c->get(RebuildTrigger::class), $site, 'block ' . (string) $args['key'] . ' deleted');
             return self::json($res, ['ok' => true]);
+        });
+
+        // Catch up translations for a site's existing blocks (button in tds-admin).
+        $app->post('/cms/sites/{site:[a-z0-9-]+}/translations/backfill', function (Request $req, Response $res, array $args) use ($c): Response {
+            if (($deny = self::require($c->get(UserContext::class), 'website:write', $res)) !== null) {
+                return $deny;
+            }
+            $repo = $c->get(CmsRepository::class);
+            $site = $repo->findSite((string) $args['site']);
+            if ($site === null) {
+                return self::json($res, ['error' => 'Site not found'], 404);
+            }
+            $sync = $c->get(TranslationSync::class);
+            if (!$sync->active()) {
+                return self::json($res, ['error' => 'Auto-translation is not configured'], 503);
+            }
+            $created = 0;
+            $skipped = 0;
+            foreach ($repo->blocks((int) $site['id']) as $meta) {
+                // Machine rows are targets, not sources.
+                if ((int) ($meta['machine_translated'] ?? 0) === 1) {
+                    $skipped++;
+                    continue;
+                }
+                $value = $repo->getBlock((int) $site['id'], (string) $meta['section_key'], (string) $meta['lang']);
+                $wrote = $sync->afterSave((int) $site['id'], (string) $meta['section_key'], (string) $meta['lang'], $value);
+                $wrote ? $created++ : $skipped++;
+            }
+            if ($created > 0) {
+                self::fireRebuild($c->get(RebuildTrigger::class), $site, 'translation backfill');
+            }
+            return self::json($res, ['created' => $created, 'skipped' => $skipped]);
         });
     }
 
