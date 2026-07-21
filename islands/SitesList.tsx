@@ -522,7 +522,7 @@ function SiteEditor({ site, onBack }: { site: Site; onBack: () => void }) {
           <input
             value={rebuildRepo}
             onChange={(e) => setRebuildRepo(e.target.value)}
-            placeholder="Tracht-Digital-Solutions/tds-landingpage"
+            placeholder="Tracht-Digital-Solutions/tds-landingpage-frontend"
           />
           <input
             value={rebuildWorkflow}

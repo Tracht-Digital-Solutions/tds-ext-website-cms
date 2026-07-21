@@ -1,9 +1,9 @@
-# tds-ext-website-cms
+# tds-ext-website-cms-pkg
 
 The **Website-CMS** as a panel extension, ported from `tds-content-api`'s
 `/landing` content-block model. It edits the **editable sections of the public
 sites**, stored as one JSON block per **site × section × language**; the static
-sites fetch these at build time and merge them over their tds-shared / local
+sites fetch these at build time and merge them over their tds-shared-pkg / local
 defaults (a missing block falls back to the default).
 
 **1:n sites:** a `cms_site` registry lets one panel manage several websites;

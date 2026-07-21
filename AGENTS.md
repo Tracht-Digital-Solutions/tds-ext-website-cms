@@ -1,7 +1,7 @@
-# AGENTS.md — tds-ext-website-cms
+# AGENTS.md — tds-ext-website-cms-pkg
 
 Website-CMS extension, ported from `tds-content-api`'s content-block model. Read
-`tds-panel-contract` + `tds-core-panel-api` AGENTS first.
+`tds-panel-contract-pkg` + `tds-core-panel-api` AGENTS first.
 
 ## Model
 
@@ -72,7 +72,7 @@ Website-CMS extension, ported from `tds-content-api`'s content-block model. Read
   (invalid JSON blocks the save). Purely frontend — the block API + shape validation
   are unchanged.
 - **CP7:** corrected + widened `SECTION_SCHEMAS` to match the **actual
-  tds-landingpage section defaults** (CP6's hero/about/services keys were guessed
+  tds-landingpage-frontend section defaults** (CP6's hero/about/services keys were guessed
   and wrong — they'd show empty fields for real content). Now accurate for `hero`
   (headline/headlineAccent/headlineSuffix/tagline/sub/cta1/cta2/scrollHint),
   `about` (label/headline/headlineAccent/lead/p1/p2/stat{1,2,3}{Value,Label}),
@@ -89,7 +89,7 @@ Website-CMS extension, ported from `tds-content-api`'s content-block model. Read
   of plain strings, e.g. pricing `includes`/`notes`) — usable both top-level and as
   an item field inside an object list (pricing `items[].includes`). `LeafInput` now
   emits the correctly-typed value (string/number/bool) and `blank()` seeds new list
-  items per field type. Shapes verified against tds-shared `translations.ts`
+  items per field type. Shapes verified against tds-shared-pkg `translations.ts`
   (`t.pricing`/`t.consulting`/`t.footer`).
 - **TODO (next):** nothing outstanding for the structured forms — extend
   `SECTION_SCHEMAS` if a site introduces a new section shape.
