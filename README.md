@@ -18,9 +18,14 @@ blocks are scoped to a site.
   (`{value, lang}`), `DELETE …`.
 - **Frontend:** nav "Website-CMS" → `/website`, the sites list + add-site form,
   the sites dashboard widget, DE/EN i18n.
+- **Public read (UNAUTHENTICATED)** — the successor to tds-content-api's open
+  `GET /content/landing?lang=` the public landingpage/blog SSG builds fetch: returns
+  the default site's content blocks for a language as `{blocks: {section_key: value}}`
+  (landing sections + the blog's `cookie_banner`/`ads` config blocks). Degrades to
+  `{blocks:{}}` on a DB error (build-fetch fail-safe).
 
-Auth: `website:read`/`website:write` from the core `UserContext` (admins bypass);
-data via the core `PDO`.
+Auth: the admin routes need `website:read`/`website:write` from the core `UserContext`
+(admins bypass); the `/content/landing` public read is ungated. Data via the core `PDO`.
 
 ## Still to port (later checkpoints)
 
