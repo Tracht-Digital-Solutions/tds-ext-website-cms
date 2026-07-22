@@ -18,7 +18,10 @@ Website-CMS extension, ported from `tds-content-api`'s content-block model. Read
 
 ## Gotchas
 
-- Migration class names are **module-prefixed** (`WebsiteCms*`).
+- Migration class names are **module-prefixed** (`WebsiteCms*`) AND the numeric
+  **version prefixes are globally unique** (this module owns the `20260727*`
+  band) — every composed module's migrations share one `phinxlog`, so a reused
+  class name OR version collides. Keep new migrations in this band.
 - Routes are closures resolving `UserContext`/`CmsRepository` from the container
   at request time (UserContext is rebound per request by the core AuthMiddleware).
 - DB-backed tests skip without `TDS_TEST_DB_DSN`; the committed test covers
